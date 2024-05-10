@@ -1,5 +1,7 @@
 import base64
 from datetime import datetime, timezone
+import json
+import subprocess
 from stellar_sdk import xdr
 from stellar_sdk import parse_transaction_envelope_from_xdr
 from stellar_sdk import *
@@ -54,7 +56,7 @@ class Formatter:
         self.te = te
 
     def add(self, line):
-        self.lines.append(line + "\n")
+        self.lines.append(line)
 
     def format_tx_source(self, tx_source: MuxedAccount):
         # Here is inconsistent with libstellar.
@@ -204,6 +206,7 @@ class Formatter:
     ) -> int:
         current_index += 1
         self.add(f"Nested Authorization; {current_index} of {auth_count}")
+        self.add("Soroban; Invoke Smart Contract")
         self.add(
             f"Contract ID; {Address.from_xdr_sc_address(sub_invocation.function.contract_fn.contract_address).address}"
         )
@@ -235,6 +238,7 @@ class Formatter:
             op.host_function.type
             == xdr.HostFunctionType.HOST_FUNCTION_TYPE_INVOKE_CONTRACT
         ):
+            self.add("Soroban; Invoke Smart Contract")
             self.add(
                 f"Contract ID; {Address.from_xdr_sc_address(op.host_function.invoke_contract.contract_address).address}"
             )
@@ -286,7 +290,8 @@ class Formatter:
         self.format_memo(tx.memo)
         self.format_fee(tx.fee)
         self.format_sequence(tx.sequence)
-        self.format_preconditions(tx.preconditions)
+        if tx.preconditions:
+            self.format_preconditions(tx.preconditions)
         self.format_tx_source(tx.source)
         for index, op in enumerate(tx.operations):
             if len(tx.operations) > 1:
@@ -295,7 +300,8 @@ class Formatter:
 
     def format_network(self, network: str):
         if network == Network.PUBLIC_NETWORK_PASSPHRASE:
-            self.add("Network; Public")
+            # self.add("Network; Public")
+            pass
         elif network == Network.TESTNET_NETWORK_PASSPHRASE:
             self.add("Network: Testnet")
         else:
@@ -306,4 +312,36 @@ class Formatter:
         self.format_transaction(self.te.transaction)
 
     def get_formatted(self):
-        return "".join(self.lines)
+        return "\n".join(self.lines)
+
+def execute_command(command):
+    try:
+        output = subprocess.check_output(command, shell=True, universal_newlines=True)
+        return output.strip()
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing command: {e}")
+        return None
+
+def format_with_c(te: TransactionEnvelope):
+    data = base64.b64encode(te.signature_base()).decode()
+    command = f"./build/test_tx_formatter {data}"
+    output = execute_command(command)
+    return output
+
+def compare_output(te: TransactionEnvelope):
+    resp_c = format_with_c(te)
+    formatter = Formatter(te)
+    formatter.format_transaction_envelope()
+    resp_py = formatter.get_formatted()
+    if resp_c != resp_py:
+        print(resp_c)
+        print(resp_py)
+        print(te.to_xdr())
+
+if __name__ == "__main__":
+    with open("./soroban_txs.json", "r") as f:
+        records = json.load(f)
+        for idx, item in enumerate(records):
+            tx_envelope = item['tx_envelope']
+            te = TransactionEnvelope.from_xdr(tx_envelope, Network.PUBLIC_NETWORK_PASSPHRASE)
+            compare_output(te)
