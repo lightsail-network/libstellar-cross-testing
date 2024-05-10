@@ -171,7 +171,7 @@ class Formatter:
                 if len(s) <= MAX_VALUE_LENGTH:
                     self.add(f"{title}; {s.decode()}")
                 else:
-                    v = f"{s[:MAX_VALUE_LENGTH // 2]}..{s[-MAX_VALUE_LENGTH // 2:]}"
+                    v = f"{s.decode()[:MAX_VALUE_LENGTH // 2]}..{s.decode()[-(MAX_VALUE_LENGTH // 2) + 2:]}"
                     self.add(f"{title}; {v}")
             else:
                 self.add("[unprintable string]")
@@ -206,17 +206,25 @@ class Formatter:
     ) -> int:
         current_index += 1
         self.add(f"Nested Authorization; {current_index} of {auth_count}")
-        self.add("Soroban; Invoke Smart Contract")
-        self.add(
-            f"Contract ID; {Address.from_xdr_sc_address(sub_invocation.function.contract_fn.contract_address).address}"
-        )
-        self.add(
-            f"Function; {sub_invocation.function.contract_fn.function_name.sc_symbol.decode()}"
-        )
-        for index, arg in enumerate(sub_invocation.function.contract_fn.args):
-            self.format_sc_val(
-                arg, len(sub_invocation.function.contract_fn.args), index
+
+        if (
+            sub_invocation.function.type
+            == xdr.SorobanAuthorizedFunctionType.SOROBAN_AUTHORIZED_FUNCTION_TYPE_CONTRACT_FN
+        ):
+            self.add("Soroban; Invoke Smart Contract")
+            self.add(
+                f"Contract ID; {Address.from_xdr_sc_address(sub_invocation.function.contract_fn.contract_address).address}"
             )
+            self.add(
+                f"Function; {sub_invocation.function.contract_fn.function_name.sc_symbol.decode()}"
+            )
+            for index, arg in enumerate(sub_invocation.function.contract_fn.args):
+                self.format_sc_val(
+                    arg, len(sub_invocation.function.contract_fn.args), index
+                )
+        else:
+            self.add("Soroban; Create Smart Contract")
+
         for sub in sub_invocation.sub_invocations:
             current_index = self.format_sub_invocation(sub, current_index, auth_count)
         return current_index
@@ -314,13 +322,15 @@ class Formatter:
     def get_formatted(self):
         return "\n".join(self.lines)
 
+
 def execute_command(command):
     try:
         output = subprocess.check_output(command, shell=True, universal_newlines=True)
         return output.strip()
     except subprocess.CalledProcessError as e:
-        print(f"Error executing command: {e}")
+        # print(f"Error executing command: {e}")
         return None
+
 
 def format_with_c(te: TransactionEnvelope):
     data = base64.b64encode(te.signature_base()).decode()
@@ -328,20 +338,31 @@ def format_with_c(te: TransactionEnvelope):
     output = execute_command(command)
     return output
 
+
 def compare_output(te: TransactionEnvelope):
     resp_c = format_with_c(te)
     formatter = Formatter(te)
     formatter.format_transaction_envelope()
     resp_py = formatter.get_formatted()
-    if resp_c != resp_py:
-        print(resp_c)
-        print(resp_py)
-        print(te.to_xdr())
+    return resp_c == resp_py, resp_c, resp_py
+
 
 if __name__ == "__main__":
     with open("./soroban_txs.json", "r") as f:
         records = json.load(f)
         for idx, item in enumerate(records):
-            tx_envelope = item['tx_envelope']
-            te = TransactionEnvelope.from_xdr(tx_envelope, Network.PUBLIC_NETWORK_PASSPHRASE)
-            compare_output(te)
+            tx_envelope = item["tx_envelope"]
+            te = TransactionEnvelope.from_xdr(
+                tx_envelope, Network.PUBLIC_NETWORK_PASSPHRASE
+            )
+            print("Processing tx:", idx + 1)
+            eq, resp_c, resp_py = compare_output(te)
+            if not eq:
+                print(te.to_xdr())
+                print("-" * 24)
+                print(base64.b64encode(te.signature_base()).decode())
+                print("-" * 24)
+                print(resp_c)
+                print("-" * 24)
+                print(resp_py)
+                raise
