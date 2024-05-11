@@ -103,7 +103,7 @@ def timestamp_to_utc_string(timestamp: int) -> str:
 
 
 class Formatter:
-    def __init__(self, te: TransactionEnvelope):
+    def __init__(self, te: TransactionEnvelope | FeeBumpTransactionEnvelope):
         self.lines = []
         self.te = te
 
@@ -160,7 +160,9 @@ class Formatter:
 
     def format_fee(self, fee: int):
         # assume we are in public network
-        self.add(f"Max Fee; {Operation.from_xdr_amount(fee)} XLM")
+        self.add(
+            f"Max Fee; {printable_asset_amount(Asset.native(), Operation.from_xdr_amount(fee))}"
+        )
 
     def format_sequence(self, sequence: int):
         self.add(f"Sequence Num; {sequence}")
@@ -673,6 +675,10 @@ class Formatter:
 
         self.format_op_source(op.source)
 
+    def format_op_inflation(self, op: Inflation):
+        self.add("Operation Type; Inflation")
+        self.format_op_source(op.source)
+
     def format_operation(self, op: Operation, tx_source: MuxedAccount):
         if isinstance(op, CreateAccount):
             self.format_op_create_account(op)
@@ -693,7 +699,7 @@ class Formatter:
         elif isinstance(op, AccountMerge):
             self.format_op_account_merge(op, tx_source)
         elif isinstance(op, Inflation):
-            raise ValueError("Inflation operation is not supported")
+            self.format_op_inflation(op)
         elif isinstance(op, ManageData):
             self.format_op_manage_data(op)
         elif isinstance(op, BumpSequence):
@@ -755,7 +761,29 @@ class Formatter:
         self.format_network(self.te.network_passphrase)
         self.format_transaction(self.te.transaction)
 
+    def format_fee_bump_transaction_envelope(self):
+        fee_bump_tx = self.te.transaction
+        self.format_network(self.te.network_passphrase)
+        self.add("Fee Bump; Transaction Details")
+        self.add(f"Fee Source; {fee_bump_tx.fee_source.universal_account_id}")
+        max_fee = fee_bump_tx.base_fee * (
+            len(fee_bump_tx.inner_transaction_envelope.transaction.operations) + 1
+        )
+        self.add(
+            f"Max Fee; {printable_asset_amount(Asset.native(), Operation.from_xdr_amount(max_fee))}"
+        )
+        self.add(f"InnerTx; Details")
+        self.format_transaction(fee_bump_tx.inner_transaction_envelope.transaction)
+
+    def format(self):
+        if isinstance(self.te, FeeBumpTransactionEnvelope):
+            self.format_fee_bump_transaction_envelope()
+        else:
+            self.format_transaction_envelope()
+
     def get_formatted(self):
+        if not self.lines:
+            self.format()
         return "\n".join(self.lines)
 
 
@@ -778,7 +806,6 @@ def format_with_c(te: TransactionEnvelope):
 def compare_output(te: TransactionEnvelope):
     resp_c = format_with_c(te)
     formatter = Formatter(te)
-    formatter.format_transaction_envelope()
     resp_py = formatter.get_formatted()
     return resp_c == resp_py, resp_c, resp_py
 
@@ -788,18 +815,15 @@ if __name__ == "__main__":
         records = json.load(f)
         for idx, item in enumerate(records):
             tx_envelope = item["tx_envelope"]
-            try:
-                te = TransactionEnvelope.from_xdr(
-                    tx_envelope, Network.PUBLIC_NETWORK_PASSPHRASE
-                )
-                print("Processing tx:", idx + 1)
-                eq, resp_c, resp_py = compare_output(te)
-                if not eq:
-                    print(te.to_xdr())
-                    print("-" * 24)
-                    print(base64.b64encode(te.signature_base()).decode())
-                    print("-" * 24)
-                    print_diff(resp_c, resp_py)
-                    raise ValueError("Output mismatch")
-            except:
-                pass
+            te = parse_transaction_envelope_from_xdr(
+                tx_envelope, Network.PUBLIC_NETWORK_PASSPHRASE
+            )
+            print("Processing tx:", idx + 1)
+            eq, resp_c, resp_py = compare_output(te)
+            if not eq:
+                print(te.to_xdr())
+                print("-" * 24)
+                print(base64.b64encode(te.signature_base()).decode())
+                print("-" * 24)
+                print_diff(resp_c, resp_py)
+                raise ValueError("Output mismatch")
