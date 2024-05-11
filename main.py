@@ -757,7 +757,7 @@ def execute_command(command):
         return output.strip()
     except subprocess.CalledProcessError as e:
         # print(f"Error executing command: {e}")
-        return None
+        return ""
 
 
 def format_with_c(te: TransactionEnvelope):
