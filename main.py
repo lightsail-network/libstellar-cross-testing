@@ -1,4 +1,5 @@
 import base64
+import difflib
 from datetime import datetime, timezone
 import json
 import subprocess
@@ -9,6 +10,18 @@ from stellar_sdk.operation.revoke_sponsorship import RevokeSponsorshipType
 
 NETWORK = Network.PUBLIC_NETWORK_PASSPHRASE
 MAX_VALUE_LENGTH = 104
+
+
+def print_diff(text1: str, text2: str):
+    differ = difflib.Differ()
+    diff = list(differ.compare(text1.splitlines(), text2.splitlines()))
+    for line in diff:
+        if line.startswith("- "):
+            print("\033[91m" + line + "\033[0m")
+        elif line.startswith("+ "):
+            print("\033[92m" + line + "\033[0m")
+        else:
+            print(line)
 
 
 def summary(s: str, left: int = 0, right: int = 0):
@@ -240,17 +253,17 @@ class Formatter:
         return count
 
     def format_sub_invocation(
-            self,
-            sub_invocation: xdr.SorobanAuthorizedInvocation,
-            current_index: int,
-            auth_count: int,
+        self,
+        sub_invocation: xdr.SorobanAuthorizedInvocation,
+        current_index: int,
+        auth_count: int,
     ) -> int:
         current_index += 1
         self.add(f"Nested Authorization; {current_index} of {auth_count}")
 
         if (
-                sub_invocation.function.type
-                == xdr.SorobanAuthorizedFunctionType.SOROBAN_AUTHORIZED_FUNCTION_TYPE_CONTRACT_FN
+            sub_invocation.function.type
+            == xdr.SorobanAuthorizedFunctionType.SOROBAN_AUTHORIZED_FUNCTION_TYPE_CONTRACT_FN
         ):
             self.add("Soroban; Invoke Smart Contract")
             self.add(
@@ -272,20 +285,20 @@ class Formatter:
 
     def format_op_invoke_host_function(self, op: InvokeHostFunction):
         if (
-                op.host_function.type
-                == xdr.HostFunctionType.HOST_FUNCTION_TYPE_CREATE_CONTRACT
+            op.host_function.type
+            == xdr.HostFunctionType.HOST_FUNCTION_TYPE_CREATE_CONTRACT
         ):
             self.add("Soroban; Create Smart Contract")
             self.format_op_source(op.source)
         elif (
-                op.host_function.type
-                == xdr.HostFunctionType.HOST_FUNCTION_TYPE_UPLOAD_CONTRACT_WASM
+            op.host_function.type
+            == xdr.HostFunctionType.HOST_FUNCTION_TYPE_UPLOAD_CONTRACT_WASM
         ):
             self.add("Soroban; Upload Smart Contract Wasm")
             self.format_op_source(op.source)
         elif (
-                op.host_function.type
-                == xdr.HostFunctionType.HOST_FUNCTION_TYPE_INVOKE_CONTRACT
+            op.host_function.type
+            == xdr.HostFunctionType.HOST_FUNCTION_TYPE_INVOKE_CONTRACT
         ):
             self.add("Soroban; Invoke Smart Contract")
             self.add(
@@ -303,8 +316,8 @@ class Formatter:
             auth_count = 0
             for auth in op.auth:
                 if (
-                        auth.credentials.type
-                        != xdr.SorobanCredentialsType.SOROBAN_CREDENTIALS_SOURCE_ACCOUNT
+                    auth.credentials.type
+                    != xdr.SorobanCredentialsType.SOROBAN_CREDENTIALS_SOURCE_ACCOUNT
                 ):
                     continue
                 for sub in auth.root_invocation.sub_invocations:
@@ -314,8 +327,8 @@ class Formatter:
             auth_index = 0
             for auth in op.auth:
                 if (
-                        auth.credentials.type
-                        == xdr.SorobanCredentialsType.SOROBAN_CREDENTIALS_SOURCE_ACCOUNT
+                    auth.credentials.type
+                    == xdr.SorobanCredentialsType.SOROBAN_CREDENTIALS_SOURCE_ACCOUNT
                 ):
                     for sub in auth.root_invocation.sub_invocations:
                         auth_index = self.format_sub_invocation(
@@ -354,18 +367,24 @@ class Formatter:
                 self.add("Change Offer; {op.offer_id}")
             self.add(f"Buy; {printable_asset(op.buying)}")
             self.add(f"Sell; {printable_asset_amount(op.selling, op.amount)}")
-            buying_asset_code = op.buying.code if op.buying.type != 'native' else 'XLM'
-            selling_asset_code = op.selling.code if op.selling.type != 'native' else 'XLM'
-            self.add(f"Price; {printable_price(op.price)} {buying_asset_code}/{selling_asset_code}")
+            buying_asset_code = op.buying.code if op.buying.type != "native" else "XLM"
+            selling_asset_code = (
+                op.selling.code if op.selling.type != "native" else "XLM"
+            )
+            self.add(
+                f"Price; {printable_price(op.price)} {buying_asset_code}/{selling_asset_code}"
+            )
         self.format_op_source(op.source)
 
     def format_op_create_passive_sell_offer(self, op: CreatePassiveSellOffer):
         self.add("Operation Type; Create Passive Sell Offer")
         self.add(f"Buy; {printable_asset(op.buying)}")
         self.add(f"Sell; {printable_asset_amount(op.selling, op.amount)}")
-        buying_asset_code = op.buying.code if op.buying.type != 'native' else 'XLM'
-        selling_asset_code = op.selling.code if op.selling.type != 'native' else 'XLM'
-        self.add(f"Price; {printable_price(op.price)} {buying_asset_code}/{selling_asset_code}")
+        buying_asset_code = op.buying.code if op.buying.type != "native" else "XLM"
+        selling_asset_code = op.selling.code if op.selling.type != "native" else "XLM"
+        self.add(
+            f"Price; {printable_price(op.price)} {buying_asset_code}/{selling_asset_code}"
+        )
         self.format_op_source(op.source)
 
     def format_op_manage_buy_offer(self, op: ManageBuyOffer):
@@ -378,9 +397,13 @@ class Formatter:
                 self.add("Change Offer; {op.offer_id}")
             self.add(f"Sell; {printable_asset(op.selling)}")
             self.add(f"Buy; {printable_asset_amount(op.buying, op.amount)}")
-            buying_asset_code = op.buying.code if op.buying.type != 'native' else 'XLM'
-            selling_asset_code = op.selling.code if op.selling.type != 'native' else 'XLM'
-            self.add(f"Price; {printable_price(op.price)} {selling_asset_code}/{buying_asset_code}")
+            buying_asset_code = op.buying.code if op.buying.type != "native" else "XLM"
+            selling_asset_code = (
+                op.selling.code if op.selling.type != "native" else "XLM"
+            )
+            self.add(
+                f"Price; {printable_price(op.price)} {selling_asset_code}/{buying_asset_code}"
+            )
         self.format_op_source(op.source)
 
     def format_change_trust(self, op: ChangeTrust):
@@ -435,7 +458,7 @@ class Formatter:
         self.format_op_source(op.source)
 
     def format_op_begin_sponsoring_future_reserves(
-            self, op: BeginSponsoringFutureReserves
+        self, op: BeginSponsoringFutureReserves
     ):
         self.add("Operation Type; Begin Sponsoring Future Reserves")
         self.add(f"Sponsored ID; {op.sponsored_id}")
@@ -512,18 +535,35 @@ class Formatter:
                 title = "Add Signer"
             else:
                 title = "Remove Signer"
-            if op.signer.signer_key.signer_key_type == xdr.SignerKeyType.SIGNER_KEY_TYPE_ED25519:
+            if (
+                op.signer.signer_key.signer_key_type
+                == xdr.SignerKeyType.SIGNER_KEY_TYPE_ED25519
+            ):
                 self.add(f"{title}; Type Public Key")
-            elif op.signer.signer_key.signer_key_type == xdr.SignerKeyType.SIGNER_KEY_TYPE_HASH_X:
+            elif (
+                op.signer.signer_key.signer_key_type
+                == xdr.SignerKeyType.SIGNER_KEY_TYPE_HASH_X
+            ):
                 self.add(f"{title}; Type Hash(x)")
-            elif op.signer.signer_key.signer_key_type == xdr.SignerKeyType.SIGNER_KEY_TYPE_PRE_AUTH_TX:
+            elif (
+                op.signer.signer_key.signer_key_type
+                == xdr.SignerKeyType.SIGNER_KEY_TYPE_PRE_AUTH_TX
+            ):
                 self.add(f"{title}; Type Pre-Auth")
-            elif op.signer.signer_key.signer_key_type == xdr.SignerKeyType.SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD:
+            elif (
+                op.signer.signer_key.signer_key_type
+                == xdr.SignerKeyType.SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD
+            ):
                 self.add(f"{title}; Type Ed25519 Signed Payload")
             else:
                 raise ValueError("Unknown signer key type")
-            if op.signer.signer_key.signer_key_type == xdr.SignerKeyType.SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD:
-                self.add(f"Signer Key; {summary(op.signer.signer_key.encoded_signer_key, 12, 12)}")
+            if (
+                op.signer.signer_key.signer_key_type
+                == xdr.SignerKeyType.SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD
+            ):
+                self.add(
+                    f"Signer Key; {summary(op.signer.signer_key.encoded_signer_key, 12, 12)}"
+                )
             else:
                 self.add(f"Signer Key; {op.signer.signer_key.encoded_signer_key}")
 
@@ -567,16 +607,33 @@ class Formatter:
         if op.revoke_sponsorship_type == RevokeSponsorshipType.SIGNER:
             self.add("Operation Type; Revoke Sponsorship (SIGNER_KEY)")
             self.add(f"Account ID; {op.signer.account_id}")
-            if op.signer.signer_key.signer_key_type == xdr.SignerKeyType.SIGNER_KEY_TYPE_ED25519:
+            if (
+                op.signer.signer_key.signer_key_type
+                == xdr.SignerKeyType.SIGNER_KEY_TYPE_ED25519
+            ):
                 self.add("Signer Key Type; Public Key")
-            elif op.signer.signer_key.signer_key_type == xdr.SignerKeyType.SIGNER_KEY_TYPE_HASH_X:
+            elif (
+                op.signer.signer_key.signer_key_type
+                == xdr.SignerKeyType.SIGNER_KEY_TYPE_HASH_X
+            ):
                 self.add("Signer Key Type; Hash(x)")
-            elif op.signer.signer_key.signer_key_type == xdr.SignerKeyType.SIGNER_KEY_TYPE_PRE_AUTH_TX:
+            elif (
+                op.signer.signer_key.signer_key_type
+                == xdr.SignerKeyType.SIGNER_KEY_TYPE_PRE_AUTH_TX
+            ):
                 self.add("Signer Key Type; Pre-Auth")
-            elif op.signer.signer_key.signer_key_type == xdr.SignerKeyType.SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD:
+            elif (
+                op.signer.signer_key.signer_key_type
+                == xdr.SignerKeyType.SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD
+            ):
                 self.add("Signer Key Type; Ed25519 Signed Payload")
-            if op.signer.signer_key.signer_key_type == xdr.SignerKeyType.SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD:
-                self.add(f"Signer Key; {summary(op.signer.signer_key.encoded_signer_key, 12, 12)}")
+            if (
+                op.signer.signer_key.signer_key_type
+                == xdr.SignerKeyType.SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD
+            ):
+                self.add(
+                    f"Signer Key; {summary(op.signer.signer_key.encoded_signer_key, 12, 12)}"
+                )
             else:
                 self.add(f"Signer Key; {op.signer.signer_key.encoded_signer_key}")
         elif op.revoke_sponsorship_type == RevokeSponsorshipType.ACCOUNT:
@@ -733,7 +790,5 @@ if __name__ == "__main__":
                 print("-" * 24)
                 print(base64.b64encode(te.signature_base()).decode())
                 print("-" * 24)
-                print(resp_c)
-                print("-" * 24)
-                print(resp_py)
+                print_diff(resp_c, resp_py)
                 raise ValueError("Output mismatch")
