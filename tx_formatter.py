@@ -1,4 +1,5 @@
 import base64
+from decimal import ROUND_FLOOR, Decimal
 import difflib
 from datetime import datetime, timezone
 import json
@@ -11,17 +12,11 @@ from stellar_sdk.operation.revoke_sponsorship import RevokeSponsorshipType
 NETWORK = Network.PUBLIC_NETWORK_PASSPHRASE
 MAX_VALUE_LENGTH = 104
 
+_ONE = Decimal(10**7)
 
-def print_diff(text1: str, text2: str):
-    differ = difflib.Differ()
-    diff = list(differ.compare(text1.splitlines(), text2.splitlines()))
-    for line in diff:
-        if line.startswith("- "):
-            print("\033[91m" + line + "\033[0m")
-        elif line.startswith("+ "):
-            print("\033[92m" + line + "\033[0m")
-        else:
-            print(line)
+def from_xdr_amount(value: int) -> str:
+    amount = Decimal(value) / _ONE
+    return format(amount.quantize(Decimal('0.0000001'), rounding=ROUND_FLOOR), 'f')
 
 
 def summary(s: str, left: int = 0, right: int = 0):
@@ -34,10 +29,13 @@ def printable_asset(asset: Asset):
     else:
         return f"{asset.code}@{summary(asset.issuer, 3, 4)}"
 
+# def printable_price(p: Price):
+#     formatted_price = "{:.7f}".format(p.n / p.d).rstrip("0").rstrip(".")
+#     return add_separators(formatted_price)
 
 def printable_price(p: Price):
-    formatted_price = "{:.7f}".format(p.n / p.d).rstrip("0").rstrip(".")
-    return add_separators(formatted_price)
+    price = from_xdr_amount(p.n * 10000000 // p.d)
+    return add_separators(price)
 
 
 def printable_asset_amount(asset: Asset, amount: str):
@@ -89,7 +87,7 @@ def add_separators(number_string: int | str, separator: str = ",") -> str:
         number_string = str(number_string)
     parts = number_string.split(".")
     integer_part = parts[0]
-    decimal_part = parts[1] if len(parts) > 1 else ""
+    decimal_part = parts[1].rstrip('0') if len(parts) > 1 else ""
     integer_part = f"{int(integer_part):,}"
     if decimal_part:
         return f"{integer_part}.{decimal_part}"
@@ -161,7 +159,7 @@ class Formatter:
     def format_fee(self, fee: int):
         # assume we are in public network
         self.add(
-            f"Max Fee; {printable_asset_amount(Asset.native(), Operation.from_xdr_amount(fee))}"
+            f"Max Fee; {printable_asset_amount(Asset.native(), from_xdr_amount(fee))}"
         )
 
     def format_sequence(self, sequence: int):
@@ -172,7 +170,11 @@ class Formatter:
             pass
         elif isinstance(memo, TextMemo):
             if is_printable_binary(memo.memo_text):
-                self.add(f"Memo Text; {memo.memo_text.decode()}")
+                text = memo.memo_text.decode()
+                if text:
+                    self.add(f"Memo Text; {text}")
+                else:
+                    self.add(f"Memo Text;")
             else:
                 self.add(
                     f"Memo Text; Base64: {base64.b64encode(memo.memo_text).decode()}"
@@ -360,7 +362,7 @@ class Formatter:
         self.format_op_source(op.source)
 
     def format_op_manage_sell_offer(self, op: ManageSellOffer):
-        if op.amount == "0":
+        if Decimal(op.amount) == 0:
             self.add(f"Remove Offer; {op.offer_id}")
         else:
             if op.offer_id == 0:
@@ -390,7 +392,7 @@ class Formatter:
         self.format_op_source(op.source)
 
     def format_op_manage_buy_offer(self, op: ManageBuyOffer):
-        if op.amount == "0":
+        if Decimal(op.amount) == 0:
             self.add(f"Remove Offer; {op.offer_id}")
         else:
             if op.offer_id == 0:
@@ -409,7 +411,7 @@ class Formatter:
         self.format_op_source(op.source)
 
     def format_change_trust(self, op: ChangeTrust):
-        if op.limit == "0":
+        if Decimal(op.limit) == 0:
             title = "Remove Trust"
         else:
             title = "Change Trust"
@@ -420,7 +422,7 @@ class Formatter:
             self.add(f"Asset A; {printable_asset(op.asset.asset_a)}")
             self.add(f"Asset B; {printable_asset(op.asset.asset_b)}")
             self.add(f"Pool Fee Rate; 0.3%")
-        if op.limit != "0":
+        if Decimal(op.limit) != 0 and Decimal(op.limit) != Decimal("922337203685.4775807"):
             self.add(f"Trust Limit; {add_separators(op.limit)}")
         self.format_op_source(op.source)
 
@@ -770,7 +772,7 @@ class Formatter:
             len(fee_bump_tx.inner_transaction_envelope.transaction.operations) + 1
         )
         self.add(
-            f"Max Fee; {printable_asset_amount(Asset.native(), Operation.from_xdr_amount(max_fee))}"
+            f"Max Fee; {printable_asset_amount(Asset.native(), from_xdr_amount(max_fee))}"
         )
         self.add(f"InnerTx; Details")
         self.format_transaction(fee_bump_tx.inner_transaction_envelope.transaction)
@@ -785,45 +787,3 @@ class Formatter:
         if not self.lines:
             self.format()
         return "\n".join(self.lines)
-
-
-def execute_command(command):
-    try:
-        output = subprocess.check_output(command, shell=True, universal_newlines=True)
-        return output.strip()
-    except subprocess.CalledProcessError as e:
-        # print(f"Error executing command: {e}")
-        return ""
-
-
-def format_with_c(te: TransactionEnvelope):
-    data = base64.b64encode(te.signature_base()).decode()
-    command = f"./build/test_tx_formatter {data}"
-    output = execute_command(command)
-    return output
-
-
-def compare_output(te: TransactionEnvelope):
-    resp_c = format_with_c(te)
-    formatter = Formatter(te)
-    resp_py = formatter.get_formatted()
-    return resp_c == resp_py, resp_c, resp_py
-
-
-if __name__ == "__main__":
-    with open("./manually_built_txs.json", "r") as f:
-        records = json.load(f)
-        for idx, item in enumerate(records):
-            tx_envelope = item["tx_envelope"]
-            te = parse_transaction_envelope_from_xdr(
-                tx_envelope, Network.PUBLIC_NETWORK_PASSPHRASE
-            )
-            print("Processing tx:", idx + 1)
-            eq, resp_c, resp_py = compare_output(te)
-            if not eq:
-                print(te.to_xdr())
-                print("-" * 24)
-                print(base64.b64encode(te.signature_base()).decode())
-                print("-" * 24)
-                print_diff(resp_c, resp_py)
-                raise ValueError("Output mismatch")
