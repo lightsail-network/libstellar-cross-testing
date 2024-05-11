@@ -14,9 +14,10 @@ MAX_VALUE_LENGTH = 104
 
 _ONE = Decimal(10**7)
 
+
 def from_xdr_amount(value: int) -> str:
     amount = Decimal(value) / _ONE
-    return format(amount.quantize(Decimal('0.0000001'), rounding=ROUND_FLOOR), 'f')
+    return format(amount.quantize(Decimal("0.0000001"), rounding=ROUND_FLOOR), "f")
 
 
 def summary(s: str, left: int = 0, right: int = 0):
@@ -29,12 +30,9 @@ def printable_asset(asset: Asset):
     else:
         return f"{asset.code}@{summary(asset.issuer, 3, 4)}"
 
-# def printable_price(p: Price):
-#     formatted_price = "{:.7f}".format(p.n / p.d).rstrip("0").rstrip(".")
-#     return add_separators(formatted_price)
 
 def printable_price(p: Price):
-    price = from_xdr_amount(p.n * 10000000 // p.d)
+    price = from_xdr_amount(p.n * 10**7 // p.d)
     return add_separators(price)
 
 
@@ -87,7 +85,7 @@ def add_separators(number_string: int | str, separator: str = ",") -> str:
         number_string = str(number_string)
     parts = number_string.split(".")
     integer_part = parts[0]
-    decimal_part = parts[1].rstrip('0') if len(parts) > 1 else ""
+    decimal_part = parts[1].rstrip("0") if len(parts) > 1 else ""
     integer_part = f"{int(integer_part):,}"
     if decimal_part:
         return f"{integer_part}.{decimal_part}"
@@ -422,7 +420,9 @@ class Formatter:
             self.add(f"Asset A; {printable_asset(op.asset.asset_a)}")
             self.add(f"Asset B; {printable_asset(op.asset.asset_b)}")
             self.add(f"Pool Fee Rate; 0.3%")
-        if Decimal(op.limit) != 0 and Decimal(op.limit) != Decimal("922337203685.4775807"):
+        if Decimal(op.limit) != 0 and Decimal(op.limit) != Decimal(
+            "922337203685.4775807"
+        ):
             self.add(f"Trust Limit; {add_separators(op.limit)}")
         self.format_op_source(op.source)
 
