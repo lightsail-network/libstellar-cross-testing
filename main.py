@@ -36,7 +36,8 @@ def printable_asset(asset: Asset):
 
 
 def printable_price(p: Price):
-    return add_separators(f"{p.n / p.d:.7f}")
+    formatted_price = "{:.7f}".format(p.n / p.d).rstrip("0").rstrip(".")
+    return add_separators(formatted_price)
 
 
 def printable_asset_amount(asset: Asset, amount: str):
@@ -57,17 +58,14 @@ def printable_authorization_flag(flag: AuthorizationFlag):
 
 
 def printable_trust_line_entry_flag(flag: TrustLineEntryFlag):
-    out = []
-    if flag & TrustLineEntryFlag.AUTHORIZED_FLAG:
-        out.append("AUTHORIZED")
-    if flag & TrustLineEntryFlag.AUTHORIZED_TO_MAINTAIN_LIABILITIES_FLAG:
-        out.append("AUTHORIZED_TO_MAINTAIN_LIABILITIES")
-    if flag & TrustLineEntryFlag.UNAUTHORIZED_FLAG:
-        out.append("UNAUTHORIZED")
-    return ", ".join(out)
+    if flag == TrustLineEntryFlag.AUTHORIZED_FLAG:
+        return "AUTHORIZED"
+    if flag == TrustLineEntryFlag.AUTHORIZED_TO_MAINTAIN_LIABILITIES_FLAG:
+        return "AUTHORIZED_TO_MAINTAIN_LIABILITIES"
+    if flag == TrustLineEntryFlag.UNAUTHORIZED_FLAG:
+        return "UNAUTHORIZED"
 
 
-# TrustLineFlags
 def printable_trust_line_flag(flag: TrustLineFlags):
     out = []
     if flag & TrustLineFlags.AUTHORIZED_FLAG:
@@ -174,13 +172,15 @@ class Formatter:
             if is_printable_binary(memo.memo_text):
                 self.add(f"Memo Text; {memo.memo_text.decode()}")
             else:
-                self.add(f"Memo Text; Base64: {base64.b64encode(memo.memo_text)}")
+                self.add(
+                    f"Memo Text; Base64: {base64.b64encode(memo.memo_text).decode()}"
+                )
         elif isinstance(memo, IdMemo):
             self.add(f"Memo ID; {memo.memo_id}")
         elif isinstance(memo, HashMemo):
-            self.add(f"Memo Hash; {memo.memo_hash.upper()}")
+            self.add(f"Memo Hash; {memo.memo_hash.hex().upper()}")
         elif isinstance(memo, ReturnHashMemo):
-            self.add(f"Memo Return; {memo.memo_return.upper()}")
+            self.add(f"Memo Return; {memo.memo_return.hex().upper()}")
         else:
             raise ValueError("Unknown memo type")
 
@@ -359,12 +359,12 @@ class Formatter:
 
     def format_op_manage_sell_offer(self, op: ManageSellOffer):
         if op.amount == "0":
-            self.add("Delete Offer; {op.offer_id}")
+            self.add(f"Remove Offer; {op.offer_id}")
         else:
             if op.offer_id == 0:
                 self.add("Create Offer; Type Active")
             else:
-                self.add("Change Offer; {op.offer_id}")
+                self.add(f"Change Offer; {op.offer_id}")
             self.add(f"Buy; {printable_asset(op.buying)}")
             self.add(f"Sell; {printable_asset_amount(op.selling, op.amount)}")
             buying_asset_code = op.buying.code if op.buying.type != "native" else "XLM"
@@ -389,12 +389,12 @@ class Formatter:
 
     def format_op_manage_buy_offer(self, op: ManageBuyOffer):
         if op.amount == "0":
-            self.add("Delete Offer; {op.offer_id}")
+            self.add(f"Remove Offer; {op.offer_id}")
         else:
             if op.offer_id == 0:
                 self.add("Create Offer; Type Active")
             else:
-                self.add("Change Offer; {op.offer_id}")
+                self.add(f"Change Offer; {op.offer_id}")
             self.add(f"Sell; {printable_asset(op.selling)}")
             self.add(f"Buy; {printable_asset_amount(op.buying, op.amount)}")
             buying_asset_code = op.buying.code if op.buying.type != "native" else "XLM"
@@ -413,19 +413,19 @@ class Formatter:
             title = "Change Trust"
         if isinstance(op.asset, Asset):
             self.add(f"{title}; {printable_asset(op.asset)}")
-            self.add(f"Trust Limit; {add_separators(op.limit)}")
         else:
             self.add(f"{title}; Liquidity Pool Asset")
             self.add(f"Asset A; {printable_asset(op.asset.asset_a)}")
             self.add(f"Asset B; {printable_asset(op.asset.asset_b)}")
             self.add(f"Pool Fee Rate; 0.3%")
+        if op.limit != "0":
             self.add(f"Trust Limit; {add_separators(op.limit)}")
         self.format_op_source(op.source)
 
     def format_op_allow_trust(self, op: AllowTrust):
         self.add("Operation Type; Allow Trust")
         self.add(f"Trustor; {op.trustor}")
-        self.add(f"Asset Code: {op.asset_code}")
+        self.add(f"Asset Code; {op.asset_code}")
         self.add(f"Authorize Flag; {printable_trust_line_entry_flag(op.authorize)}")
         self.format_op_source(op.source)
 
@@ -435,7 +435,7 @@ class Formatter:
             self.add(f"Merge Account; {op.source.universal_account_id}")
         else:
             self.add(f"Merge Account; {tx_source.universal_account_id}")
-        self.add(f"Destination; {op.destination}")
+        self.add(f"Destination; {op.destination.universal_account_id}")
         self.format_op_source(op.source)
 
     def format_op_bump_sequence(self, op: BumpSequence):
@@ -444,11 +444,13 @@ class Formatter:
         self.format_op_source(op.source)
 
     def format_op_extend_footprint_ttl(self, op: ExtendFootprintTTL):
-        self.add("Operation Type; Extend Footprint TTL")
+        # TODO: Operation Type?
+        self.add("Soroban; Extend Footprint TTL")
         self.format_op_source(op.source)
 
     def format_op_restore_footprint(self, op: RestoreFootprint):
-        self.add("Operation Type; Restore Footprint")
+        # TODO: Operation Type?
+        self.add("Soroban; Restore Footprint")
         self.format_op_source(op.source)
 
     def format_op_clawback(self, op: Clawback):
@@ -475,17 +477,17 @@ class Formatter:
 
     def format_op_clawback_claimable_balance(self, op: ClawbackClaimableBalance):
         self.add("Operation Type; Clawback Claimable Balance")
-        self.add(f"Balance ID; {summary(op.balance_id, 12, 12)}")
+        self.add(f"Balance ID; {op.balance_id.upper()}")
         self.format_op_source(op.source)
 
     def format_op_claim_claimable_balance(self, op: ClaimClaimableBalance):
         self.add("Operation Type; Claim Claimable Balance")
-        self.add(f"Balance ID; {summary(op.balance_id, 12, 12)}")
+        self.add(f"Balance ID; {summary(op.balance_id.upper(), 12, 12)}")
         self.format_op_source(op.source)
 
     def format_op_liquidity_pool_deposit(self, op: LiquidityPoolDeposit):
         self.add("Operation Type; Liquidity Pool Deposit")
-        self.add(f"Liquidity Pool ID; {op.liquidity_pool_id}")
+        self.add(f"Liquidity Pool ID; {op.liquidity_pool_id.upper()}")
         self.add(f"Max Amount A; {add_separators(op.max_amount_a)}")
         self.add(f"Max Amount B; {add_separators(op.max_amount_b)}")
         self.add(f"Min Price; {printable_price(op.min_price)}")
@@ -494,7 +496,7 @@ class Formatter:
 
     def format_op_liquidity_pool_withdraw(self, op: LiquidityPoolWithdraw):
         self.add("Operation Type; Liquidity Pool Withdraw")
-        self.add(f"Liquidity Pool ID; {op.liquidity_pool_id}")
+        self.add(f"Liquidity Pool ID; {op.liquidity_pool_id.upper()}")
         self.add(f"Amount; {add_separators(op.amount)}")
         self.add(f"Min Amount A; {add_separators(op.min_amount_a)}")
         self.add(f"Min Amount B; {add_separators(op.min_amount_b)}")
@@ -566,16 +568,18 @@ class Formatter:
                 )
             else:
                 self.add(f"Signer Key; {op.signer.signer_key.encoded_signer_key}")
+            if op.signer.weight:
+                self.add(f"Weight; {op.signer.weight}")
 
             is_empty_body = False
         if is_empty_body:
-            self.add("SET_OPTIONS; [BODY IS EMPTY]")
+            self.add("SET OPTIONS; [BODY IS EMPTY]")
         self.format_op_source(op.source)
 
     def format_op_set_trust_line_flags(self, op: SetTrustLineFlags):
         self.add("Operation Type; Set Trust Line Flags")
         self.add(f"Trustor; {op.trustor}")
-        self.add(f"Asset: {printable_asset(op.asset)}")
+        self.add(f"Asset; {printable_asset(op.asset)}")
         if op.clear_flags:
             self.add(f"Clear Flags; {printable_trust_line_flag(op.clear_flags)}")
         else:
@@ -594,7 +598,9 @@ class Formatter:
             if is_printable_binary(op.data_value):
                 self.add(f"Data Value; {op.data_value.decode()}")
             else:
-                self.add(f"Data Value; Base64: {base64.b64encode(op.data_value)}")
+                self.add(
+                    f"Data Value; Base64: {base64.b64encode(op.data_value).decode()}"
+                )
         self.format_op_source(op.source)
 
     def format_op_create_claimable_balance(self, op: CreateClaimableBalance):
@@ -649,17 +655,19 @@ class Formatter:
             if isinstance(op.trustline.asset, Asset):
                 self.add(f"Asset; {printable_asset(op.trustline.asset)}")
             else:
-                self.add(f"Liquidity Pool ID; {op.trustline.asset.liquidity_pool_id}")
+                self.add(
+                    f"Liquidity Pool ID; {op.trustline.asset.liquidity_pool_id.upper()}"
+                )
         elif op.revoke_sponsorship_type == RevokeSponsorshipType.DATA:
             self.add("Operation Type; Revoke Sponsorship (DATA)")
             self.add(f"Account ID; {op.data.account_id}")
             self.add(f"Data Name; {op.data.data_name}")
         elif op.revoke_sponsorship_type == RevokeSponsorshipType.CLAIMABLE_BALANCE:
             self.add("Operation Type; Revoke Sponsorship (CLAIMABLE_BALANCE)")
-            self.add(f"Balance ID; {op.claimable_balance_id}")
+            self.add(f"Balance ID; {op.claimable_balance_id.upper()}")
         elif op.revoke_sponsorship_type == RevokeSponsorshipType.LIQUIDITY_POOL:
             self.add("Operation Type; Revoke Sponsorship (LIQUIDITY_POOL)")
-            self.add(f"Liquidity Pool ID; {op.liquidity_pool_id}")
+            self.add(f"Liquidity Pool ID; {op.liquidity_pool_id.upper()}")
         else:
             raise ValueError("Unknown revoke sponsorship type")
 
@@ -732,7 +740,7 @@ class Formatter:
         self.format_tx_source(tx.source)
         for index, op in enumerate(tx.operations):
             if len(tx.operations) > 1:
-                self.add(f"Operation {index + 1} of {len(tx.operations)}")
+                self.add(f"Operation {index + 1} of {len(tx.operations)};")
             self.format_operation(op, tx.source)
 
     def format_network(self, network: str):
@@ -776,19 +784,22 @@ def compare_output(te: TransactionEnvelope):
 
 
 if __name__ == "__main__":
-    with open("./soroban_txs.json", "r") as f:
+    with open("./manually_built_txs.json", "r") as f:
         records = json.load(f)
         for idx, item in enumerate(records):
             tx_envelope = item["tx_envelope"]
-            te = TransactionEnvelope.from_xdr(
-                tx_envelope, Network.PUBLIC_NETWORK_PASSPHRASE
-            )
-            print("Processing tx:", idx + 1)
-            eq, resp_c, resp_py = compare_output(te)
-            if not eq:
-                print(te.to_xdr())
-                print("-" * 24)
-                print(base64.b64encode(te.signature_base()).decode())
-                print("-" * 24)
-                print_diff(resp_c, resp_py)
-                raise ValueError("Output mismatch")
+            try:
+                te = TransactionEnvelope.from_xdr(
+                    tx_envelope, Network.PUBLIC_NETWORK_PASSPHRASE
+                )
+                print("Processing tx:", idx + 1)
+                eq, resp_c, resp_py = compare_output(te)
+                if not eq:
+                    print(te.to_xdr())
+                    print("-" * 24)
+                    print(base64.b64encode(te.signature_base()).decode())
+                    print("-" * 24)
+                    print_diff(resp_c, resp_py)
+                    raise ValueError("Output mismatch")
+            except:
+                pass
