@@ -32,7 +32,7 @@ def execute_command(command):
 
 def format_with_c(te):
     data = base64.b64encode(te.signature_base()).decode()
-    command = f"./build/test_tx_formatter {data}"
+    command = f"./build/tx_formatter {data}"
     output = execute_command(command)
     return output
 

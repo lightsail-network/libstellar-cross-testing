@@ -42,7 +42,7 @@ include_directories($ENV{BOLOS_SDK}/lib_standard_app)
 
 include_directories(${OPENSSL_INCLUDE_DIR})
 
-add_executable(test_tx_formatter test_tx_formatter.c)
+add_executable(tx_formatter tx_formatter.c)
 
 add_library(base58 SHARED $ENV{BOLOS_SDK}/lib_standard_app/base58.c)
 add_library(bip32 SHARED $ENV{BOLOS_SDK}/lib_standard_app/bip32.c)
@@ -58,7 +58,7 @@ add_library(formatter ./libstellar/formatter.c)
 add_library(base32 ./libstellar/base32.c)
 add_library(base64 ./libstellar/base64.c)
 
-target_link_libraries(test_tx_formatter PUBLIC 
+target_link_libraries(tx_formatter PUBLIC 
                       formatter
                       parser
                       printer
@@ -73,4 +73,4 @@ target_link_libraries(test_tx_formatter PUBLIC
                       bsd
                       ${OPENSSL_LIBRARIES})
 
-add_test(test_tx_formatter test_tx_formatter)
+add_test(tx_formatter tx_formatter)
