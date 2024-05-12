@@ -6,7 +6,7 @@ import csv
 import argparse
 
 from stellar_sdk import *
-from tx_formatter import Formatter
+from stellar_formatter import Formatter
 
 
 def print_diff(text1: str, text2: str):
@@ -32,7 +32,7 @@ def execute_command(command):
 
 def format_with_c(te):
     data = base64.b64encode(te.signature_base()).decode()
-    command = f"./build/tx_formatter {data}"
+    command = f"./build/stellar_formatter -t {data}"
     output = execute_command(command)
     return output
 

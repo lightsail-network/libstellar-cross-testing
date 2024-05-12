@@ -11,11 +11,14 @@
 #define MAX_VALUE_SIZE 105
 #define MAX_OUTPUT_SIZE 131072
 
+#define ENVELOPE_TYPE_TX 0
+#define ENVELOPE_TYPE_AUTH 1
+
 static bool is_string_empty(const char *str) {
   return str == NULL || str[0] == '\0';
 }
 
-bool format_tx(uint8_t *data, size_t data_size) {
+bool format(uint8_t *data, size_t data_size, uint8_t type) {
   envelope_t envelope;
   char caption[MAX_CAPTION_SIZE];
   char value[MAX_VALUE_SIZE];
@@ -27,8 +30,14 @@ bool format_tx(uint8_t *data, size_t data_size) {
 
   memset(&envelope, 0, sizeof(envelope_t));
 
-  if (!parse_transaction_envelope(data, data_size, &envelope)) {
-    return false;
+  if (type == ENVELOPE_TYPE_TX) {
+    if (!parse_transaction_envelope(data, data_size, &envelope)) {
+      return false;
+    }
+  } else {
+    if (!parse_soroban_authorization_envelope(data, data_size, &envelope)) {
+      return false;
+    }
   }
 
   formatter_data_t fdata = {.raw_data = data,
@@ -63,21 +72,32 @@ bool format_tx(uint8_t *data, size_t data_size) {
 }
 
 int main(int argc, char *argv[]) {
-  if (argc != 2) {
-    fprintf(stderr, "Usage: %s <base64_data>\n", argv[0]);
+  if (argc != 3) {
+    fprintf(stderr, "Usage: %s [-t|-a] <base64_data>\n", argv[0]);
     return 1;
   }
 
-  const char *base64_data = argv[1];
+  uint8_t type;
+  if (strcmp(argv[1], "-t") == 0) {
+    type = ENVELOPE_TYPE_TX;
+  } else if (strcmp(argv[1], "-a") == 0) {
+    type = ENVELOPE_TYPE_AUTH;
+  } else {
+    fprintf(stderr, "Invalid option: %s\n", argv[1]);
+    fprintf(stderr, "Usage: %s [-t|-a] <base64_data>\n", argv[0]);
+    return 1;
+  }
+
+  const char *base64_data = argv[2];
   size_t base64_len = strlen(base64_data);
   uint8_t decoded_data[MAX_ENVELOPE_SIZE];
   size_t len =
       EVP_DecodeBlock(decoded_data, (const uint8_t *)base64_data, base64_len);
 
-  bool success = format_tx(decoded_data, len);
+  bool success = format(decoded_data, len, type);
 
   if (!success) {
-    fprintf(stderr, "Failed to format transaction\n");
+    fprintf(stderr, "Failed to format transaction/soroban auth.\n");
   }
   return success ? 0 : 1;
 }
