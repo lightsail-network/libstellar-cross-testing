@@ -364,7 +364,7 @@ class Formatter:
             self.add(f"Remove Offer; {op.offer_id}")
         else:
             if op.offer_id == 0:
-                self.add("Create Offer; Type Active")
+                self.add("Create Offer;")
             else:
                 self.add(f"Change Offer; {op.offer_id}")
             self.add(f"Buy; {printable_asset(op.buying)}")
@@ -394,7 +394,7 @@ class Formatter:
             self.add(f"Remove Offer; {op.offer_id}")
         else:
             if op.offer_id == 0:
-                self.add("Create Offer; Type Active")
+                self.add("Create Offer;")
             else:
                 self.add(f"Change Offer; {op.offer_id}")
             self.add(f"Sell; {printable_asset(op.selling)}")
@@ -433,12 +433,9 @@ class Formatter:
         self.add(f"Authorize Flag; {printable_trust_line_entry_flag(op.authorize)}")
         self.format_op_source(op.source)
 
-    def format_op_account_merge(self, op: AccountMerge, tx_source: MuxedAccount):
+    def format_op_account_merge(self, op: AccountMerge):
         self.add("Operation Type; Account Merge")
-        if op.source:
-            self.add(f"Merge Account; {op.source.universal_account_id}")
-        else:
-            self.add(f"Merge Account; {tx_source.universal_account_id}")
+        self.add("Send; All Funds")
         self.add(f"Destination; {op.destination.universal_account_id}")
         self.format_op_source(op.source)
 
@@ -448,13 +445,11 @@ class Formatter:
         self.format_op_source(op.source)
 
     def format_op_extend_footprint_ttl(self, op: ExtendFootprintTTL):
-        # TODO: Operation Type?
-        self.add("Soroban; Extend Footprint TTL")
+        self.add("Operation Type; Extend Footprint TTL")
         self.format_op_source(op.source)
 
     def format_op_restore_footprint(self, op: RestoreFootprint):
-        # TODO: Operation Type?
-        self.add("Soroban; Restore Footprint")
+        self.add("Operation Type; Restore Footprint")
         self.format_op_source(op.source)
 
     def format_op_clawback(self, op: Clawback):
@@ -681,7 +676,7 @@ class Formatter:
         self.add("Operation Type; Inflation")
         self.format_op_source(op.source)
 
-    def format_operation(self, op: Operation, tx_source: MuxedAccount):
+    def format_operation(self, op: Operation):
         if isinstance(op, CreateAccount):
             self.format_op_create_account(op)
         elif isinstance(op, Payment):
@@ -699,7 +694,7 @@ class Formatter:
         elif isinstance(op, AllowTrust):
             self.format_op_allow_trust(op)
         elif isinstance(op, AccountMerge):
-            self.format_op_account_merge(op, tx_source)
+            self.format_op_account_merge(op)
         elif isinstance(op, Inflation):
             self.format_op_inflation(op)
         elif isinstance(op, ManageData):
@@ -749,7 +744,7 @@ class Formatter:
         for index, op in enumerate(tx.operations):
             if len(tx.operations) > 1:
                 self.add(f"Operation {index + 1} of {len(tx.operations)};")
-            self.format_operation(op, tx.source)
+            self.format_operation(op)
 
     def format_network(self, network: str):
         if network == Network.PUBLIC_NETWORK_PASSPHRASE:
