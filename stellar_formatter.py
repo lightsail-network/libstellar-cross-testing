@@ -271,9 +271,8 @@ class Formatter:
             self.add(
                 f"Contract ID; {Address.from_xdr_sc_address(sub_invocation.function.contract_fn.contract_address).address}"
             )
-            self.add(
-                f"Function; {sub_invocation.function.contract_fn.function_name.sc_symbol.decode()}"
-            )
+            function_name = sub_invocation.function.contract_fn.function_name.sc_symbol.decode()
+            self.add(f"Function;{' ' + function_name if function_name else ''}")
             for index, arg in enumerate(sub_invocation.function.contract_fn.args):
                 self.format_sc_val(
                     arg, len(sub_invocation.function.contract_fn.args), index
@@ -306,9 +305,8 @@ class Formatter:
             self.add(
                 f"Contract ID; {Address.from_xdr_sc_address(op.host_function.invoke_contract.contract_address).address}"
             )
-            self.add(
-                f"Function; {op.host_function.invoke_contract.function_name.sc_symbol.decode()}"
-            )
+            function_name = op.host_function.invoke_contract.function_name.sc_symbol.decode()
+            self.add(f"Function;{' ' + function_name if function_name else ''}")
             for index, arg in enumerate(op.host_function.invoke_contract.args):
                 self.format_sc_val(
                     arg, len(op.host_function.invoke_contract.args), index
